@@ -21,7 +21,7 @@
     "JsonRpc.Host": "1.0.0-*",
     "JsonRpc.Client": "1.0.0-*",
     "xunit": "2.2.0-beta1-build3239",
-    "dotnet-test-xunit": "1.0.0-rc3-000000-00",
+    "dotnet-test-xunit": "1.0.0-rc2-187791-49",
     "FluentAssertions": "4.6.3",
     "Microsoft.Extensions.Logging": "1.0.0-rc2-final",
     "moq.netcore": "4.4.0-beta8",
