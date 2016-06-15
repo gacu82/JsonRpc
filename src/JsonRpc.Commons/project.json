@@ -1,0 +1,20 @@
+{
+  "version": "1.0.0-*",
+  "description": "Owin.JsonRpc",
+  "frameworks": {
+    "netcoreapp1.0": {
+      "imports": ["netcore50"],
+      "frameworkAssemblies": {
+      }
+    }
+  },
+  "dependencies": {
+    "Microsoft.NETCore.App": {
+      "type": "platform",
+      "version": "1.0.0-rc2-3002702"
+    },
+    "Newtonsoft.Json": "9.0.1-beta1",
+    "Microsoft.AspNetCore.Http.Abstractions": "1.0.0-rc2-final",
+    "Microsoft.Extensions.Logging.Abstractions": "1.0.0-rc2-final"
+  }
+}
