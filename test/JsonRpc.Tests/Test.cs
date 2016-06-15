@@ -18,8 +18,8 @@ namespace JsonRpc.Host.Tests
         public Test()
         {
             var loggerFactory = new LoggerFactory();
-            processor = new JsonRpcProcessor(loggerFactory);
             JsonRpcProcessor.ScanAssemblies(() => new Assembly[] { typeof(Test).GetTypeInfo().Assembly });
+            processor = new JsonRpcProcessor(loggerFactory);
             JsonConvert.DefaultSettings = () => new JsonSerializerSettings
             {
                 Formatting = Formatting.None,

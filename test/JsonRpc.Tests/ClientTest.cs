@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging;
 
 namespace JsonRpc.Client.Tests
 {
+    /*
     public class ClientTest
     {
         public ClientTest()
@@ -63,4 +64,5 @@ namespace JsonRpc.Client.Tests
 
         }
     }
+    */
 }
