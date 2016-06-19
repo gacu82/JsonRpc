@@ -1,9 +1,10 @@
 {
   "version": "1.0.0-*",
-  "description": "Owin.JsonRpc",
+  "description": "JsonRpc.Commons",
+  "authors": [ "Krzysztof Szczuka" ],
   "frameworks": {
     "netcoreapp1.0": {
-      "imports": ["netcore50"],
+      "imports": [ "netcore50" ],
       "frameworkAssemblies": {
       }
     }
