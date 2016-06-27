@@ -19,7 +19,9 @@
     "Newtonsoft.Json": "9.0.1-beta1",
     "Microsoft.AspNetCore.Http.Abstractions": "1.0.0-rc2-final",
     "Microsoft.Extensions.Logging.Abstractions": "1.0.0-rc2-final",
-    "JsonRpc.Commons": "1.0.0-*",
+    "JsonRpc.Commons": {
+      "target": "project"
+    },
     "Microsoft.Extensions.DependencyInjection.Abstractions": "1.0.0-rc2-final"
   }
 }
