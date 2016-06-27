@@ -2,7 +2,6 @@
 using System.Linq;
 using System.Collections.Concurrent;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
 
@@ -11,7 +10,7 @@ namespace JsonRpc.Host
     internal class RpcMethodRegister
     {
 
-        private ConcurrentDictionary<string, RpcMethod> register = new ConcurrentDictionary<string, RpcMethod>();
+        private readonly ConcurrentDictionary<string, RpcMethod> register = new ConcurrentDictionary<string, RpcMethod>();
         private readonly ILogger logger;
         private bool assembliesScanned = false;
 
@@ -20,7 +19,7 @@ namespace JsonRpc.Host
             this.logger = logger;
         }
 
-        public void ScanAssemblies(Assembly[] assemblies)
+        public void ScanAssemblies(IEnumerable<Assembly> assemblies)
         {
             foreach (Assembly a in assemblies)
             {
@@ -37,7 +36,7 @@ namespace JsonRpc.Host
                         var name = rpcAttrib.MethodName ?? memberInfo.Name;
                         var service = rpcAttrib.ServiceName;
                         var key = this.GetServiceMethodKey(name, service);
-                        this.register.AddOrUpdate(key, new RpcMethod(t, methodInfo), (s, e) => { return e; });
+                        this.register.AddOrUpdate(key, new RpcMethod(t, methodInfo), (s, e) => e);
                     }
                 }
             }

@@ -13,18 +13,21 @@ namespace JsonRpc.Host.Tests
 {
     public class Test
     {
-        private JsonRpcProcessor processor;
+        private readonly JsonRpcProcessor processor;
 
         public Test()
         {
             var loggerFactory = new LoggerFactory();
-            JsonRpcProcessor.ScanAssemblies(() => new Assembly[] { typeof(Test).GetTypeInfo().Assembly });
-            processor = new JsonRpcProcessor(loggerFactory);
-            JsonConvert.DefaultSettings = () => new JsonSerializerSettings
+            processor = new JsonRpcProcessor(loggerFactory.CreateLogger("JsonRpc.Host"),
+                loggerFactory.CreateLogger("JsonRpc.Host.Diagnostics"), null);
+            JsonRpcProcessor.Instance.Configure(new JsonRpcHostOptions()
             {
-                Formatting = Formatting.None,
+                AssembliesToScan = new[] { typeof(Test).GetTypeInfo().Assembly }
+            });
+            JsonConvert.DefaultSettings = () => new JsonSerializerSettings()
+            {
                 ContractResolver = new CamelCasePropertyNamesContractResolver()
-            };   
+            };
         }
 
         [Fact]
@@ -220,7 +223,7 @@ namespace JsonRpc.Host.Tests
         [Fact]
         public async Task TestCustomException()
         {
-            JsonRpcProcessor.RegisterException<CustomException>(e => new RpcError(555, "aaa"));
+            JsonRpcProcessor.Instance.RegisterException<CustomException>(e => new RpcError(555, "aaa"));
             var request = @"{'jsonrpc': '2.0', 'method': 'customexceptiontest', 'id': 1}";
             var resp = await processor.ProcessAsync(request);
             var response = JObject.Parse(resp);
@@ -272,14 +275,14 @@ namespace JsonRpc.Host.Tests
         public async Task RequestHookTest()
         {
             GlobalFlags.HookHit = false;
-            JsonRpcProcessor.RegisterRequestHookService<RequestHookService>();
+            JsonRpcProcessor.Instance.RegisterRequestHookService<RequestHookService>();
             var request = @"{'jsonrpc': '2.0', 'method': 'someMethod', 'id': 1, params: { 'a': 1, 'b': 'c'}}";
             var resp = await processor.ProcessAsync(request);
             var response = JObject.Parse(resp);
             Assert.True(GlobalFlags.HookHit);
 
             GlobalFlags.HookHit = false;
-            JsonRpcProcessor.UnregisterRequestHookService<RequestHookService>();
+            JsonRpcProcessor.Instance.UnregisterRequestHookService<RequestHookService>();
         }
 
         [Fact]

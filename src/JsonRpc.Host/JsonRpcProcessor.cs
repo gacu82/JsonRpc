@@ -2,70 +2,87 @@
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using JsonRpc.Commons;
 using JsonRpc.Commons.Exceptions;
+using Newtonsoft.Json;
 
 namespace JsonRpc.Host
 {
     public class JsonRpcProcessor
     {
-        private static Dictionary<Type, Func<Exception, RpcError>> exceptionHandlers
+        private readonly Dictionary<Type, Func<Exception, RpcError>> exceptionHandlers
            = new Dictionary<Type, Func<Exception, RpcError>>();
-        private static List<Type> requestHookServices = new List<Type>();
+        private readonly List<Type> requestHookServices = new List<Type>();
         private readonly IServiceProvider serviceProvider;
         private readonly ILogger logger;
+        private readonly ILogger loggerDiag;
         private readonly RpcMethodRegister register;
         private readonly Extractor parser;
 
-        public JsonRpcProcessor(
-            ILoggerFactory loggerFactory,
-            IServiceProvider serviceProvider = null)
+
+        public JsonRpcProcessor(ILogger logger,
+            ILogger loggerDiag,
+            IServiceProvider serviceProvider)
         {
             this.serviceProvider = serviceProvider;
-            this.logger = loggerFactory.CreateLogger("JsonRpc.Host");
+            this.logger = logger;
+            this.loggerDiag = loggerDiag;
             this.register = new RpcMethodRegister(this.logger);
-            this.register.ScanAssemblies(assemblyScan());
             this.parser = new Extractor(this.register, this.logger);
+            JsonRpcProcessor.instance = this;
         }
 
-        private static Func<Assembly[]> assemblyScan;
+        private static JsonRpcProcessor instance;
+        public static JsonRpcProcessor Instance => instance;
 
-        public static void ScanAssemblies(Func<Assembly[]> assemblies)
+        public void ScanAssemblies(Assembly[] assemblies)
         {
-            assemblyScan = assemblies;
+            this.register.ScanAssemblies(assemblies);
         }
 
-        public static void RegisterException<T>(Func<T, RpcError> handler) where T : Exception
+        public void Configure(JsonRpcHostOptions options)
         {
-            JsonRpcProcessor.exceptionHandlers[typeof(T)] = (e) => handler.Invoke((T)e);
+            if(options.SerializerSettings != null) RpcSerializer.SerializerSettings = options.SerializerSettings;
+            if(options.AssembliesToScan != null) this.register.ScanAssemblies(options.AssembliesToScan);
         }
 
-        public static void UnregisterExcetpion<T>()
+        public void ConfigureRequestId(string requestIdRegex)
         {
-            if (JsonRpcProcessor.exceptionHandlers.ContainsKey(typeof(T)))
+            
+        }
+
+        public void RegisterException<T>(Func<T, RpcError> handler) where T : Exception
+        {
+            this.exceptionHandlers[typeof(T)] = e => handler.Invoke((T)e);
+        }
+
+        public void UnregisterExcetpion<T>()
+        {
+            if (this.exceptionHandlers.ContainsKey(typeof(T)))
             {
-                JsonRpcProcessor.exceptionHandlers.Remove(typeof(T));
+                this.exceptionHandlers.Remove(typeof(T));
             }
         }
 
-        public static void RegisterRequestHookService<T>() where T : IRequestHookService
+        public void RegisterRequestHookService<T>() where T : IRequestHookService
         {
-            JsonRpcProcessor.requestHookServices.Add(typeof(T));
+            this.requestHookServices.Add(typeof(T));
         }
 
-        public static void UnregisterRequestHookService<T>() where T : IRequestHookService
+        public void UnregisterRequestHookService<T>() where T : IRequestHookService
         {
-            JsonRpcProcessor.requestHookServices.Remove(typeof(T));
+            this.requestHookServices.Remove(typeof(T));
         }
 
         public async Task<string> ProcessAsync(string json, string service = null)
         {
             try
             {
-                var calls = this.parser.ExtractAndMatch(json, service);
+                var calls = this.parser.ExtractAndMatchCalls(json, service);
                 this.FireRequestHooks(calls.Select(x => x.RawRequestJson));
                 await this.CallAsync(calls.Where(x => x.Error == null).ToList());
                 var responses = this.PrepareResponses(calls);
@@ -86,7 +103,7 @@ namespace JsonRpc.Host
 
         private void FireRequestHooks(IEnumerable<JToken> requests)
         {
-            foreach (var hookService in JsonRpcProcessor.requestHookServices)
+            foreach (var hookService in this.requestHookServices)
             {
                 IRequestHookService service = (IRequestHookService)this.CreateServiceInstance(hookService);
                 foreach (var request in requests)
@@ -101,7 +118,7 @@ namespace JsonRpc.Host
             var responses = new List<RpcResponse>();
             foreach (var call in rpcCalls)
             {
-                if (call.CallType == RpcType.Notification) continue;
+                if (call.CallType == RpcCallType.Notification) continue;
 
                 if (call.Error != null)
                 {
@@ -118,7 +135,6 @@ namespace JsonRpc.Host
 
             return responses;
         }
-
 
         private object CreateServiceInstance(Type type)
         {
@@ -141,9 +157,12 @@ namespace JsonRpc.Host
         private async Task CallAsync(List<RpcCallContext> rpcCalls)
         {
             var awaitableCalls = new List<RpcCallContext>();
-
+            var watch = new Stopwatch();
+            var dateStart = DateTime.Now;
             foreach (var call in rpcCalls)
             {
+                dateStart = DateTime.Now;
+                watch.Start();
                 try
                 {
                     if (call.Error != null) return;
@@ -171,6 +190,12 @@ namespace JsonRpc.Host
                 {
                     this.HandleExeption(ex, call);
                 }
+                this.loggerDiag.LogInformation(JsonConvert.SerializeObject(new
+                {
+                    dateStart = dateStart,
+                    methodName = call.MethodName,
+                    processingTime = watch.ElapsedMilliseconds
+                }, RpcSerializer.SerializerSettings));
             }
         }
 
@@ -182,9 +207,9 @@ namespace JsonRpc.Host
             }
             else
             {
-                if (JsonRpcProcessor.exceptionHandlers.ContainsKey(ex.GetType()))
+                if (this.exceptionHandlers.ContainsKey(ex.GetType()))
                 {
-                    var handler = JsonRpcProcessor.exceptionHandlers[ex.GetType()];
+                    var handler = this.exceptionHandlers[ex.GetType()];
                     call.Error = handler(ex);
                 }
                 else

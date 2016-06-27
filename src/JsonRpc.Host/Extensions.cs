@@ -6,7 +6,7 @@ namespace JsonRpc.Host
     {
         public static void UseJsonRpc(this IApplicationBuilder builder, string prefix)
         {
-            builder.Map(prefix, (b) => { b.UseMiddleware<JsonRpcMiddleware>(); });
+            builder.Map(prefix, b => { b.UseMiddleware<JsonRpcMiddleware>(); });
         }
     }
 }

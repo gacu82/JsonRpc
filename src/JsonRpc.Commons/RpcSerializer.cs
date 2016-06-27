@@ -3,19 +3,17 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
-using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace JsonRpc.Commons
 {
-    public static class RpcSerializer
+    internal static class RpcSerializer
     {
-        private static JsonSerializerSettings serializerSettings;
+        public static JsonSerializerSettings SerializerSettings { get; set; }
 
         static RpcSerializer()
         {
-            serializerSettings = new JsonSerializerSettings()
+            SerializerSettings = new JsonSerializerSettings()
             {
                 Formatting = Formatting.None,
                 ContractResolver = new CamelCasePropertyNamesContractResolver(),
@@ -24,13 +22,8 @@ namespace JsonRpc.Commons
                 DateTimeZoneHandling = DateTimeZoneHandling.Local,
                 DateFormatString = "yyyy-MM-ddTHH:mm:ss.FFFK"
             };
-            serializerSettings.Converters.Add(new StringEnumConverter());
-            serializerSettings.Converters.Add(new IsoDateTimeConverter() { DateTimeFormat = "yyyy-MM-ddTHH:mm:ss.FFFK" });
-        }
-
-        public static void Configure(Func<JsonSerializerSettings> settings)
-        {
-            serializerSettings = settings();
+            SerializerSettings.Converters.Add(new StringEnumConverter());
+            SerializerSettings.Converters.Add(new IsoDateTimeConverter { DateTimeFormat = "yyyy-MM-ddTHH:mm:ss.FFFK" });
         }
 
         public static string ToJson(RpcCall call)
@@ -40,14 +33,13 @@ namespace JsonRpc.Commons
             {
                 dto["params"] = JToken.FromObject(call.Params);
             }
-            return JsonConvert.SerializeObject(dto, serializerSettings);
+            return JsonConvert.SerializeObject(dto, SerializerSettings);
         }
-
 
         public static string ToJson(RpcResponse response)
         {
             var dto = RpcSerializer.GetJsonObjectResponse(response);
-            return JsonConvert.SerializeObject(dto, serializerSettings);
+            return JsonConvert.SerializeObject(dto, SerializerSettings);
         }
 
         public static string ToJson(IList<RpcResponse> responses)
@@ -63,7 +55,7 @@ namespace JsonRpc.Commons
                 {
                     responseArray.Add(RpcSerializer.GetJsonObjectResponse(resp));
                 }
-                return JsonConvert.SerializeObject(responseArray, serializerSettings);
+                return JsonConvert.SerializeObject(responseArray, SerializerSettings);
             }
         }
 
@@ -75,7 +67,7 @@ namespace JsonRpc.Commons
             }
             else
             {
-                return JsonConvert.SerializeObject(calls, serializerSettings);
+                return JsonConvert.SerializeObject(calls, SerializerSettings);
             }
         }
 
@@ -117,7 +109,7 @@ namespace JsonRpc.Commons
 
         private static JObject GetResponseContainer(object id = null)
         {
-            JObject dto = new JObject();
+            var dto = new JObject();
             dto["jsonrpc"] = "2.0";
             if (id != null) dto["id"] = JToken.FromObject(id);
             return dto;
@@ -125,7 +117,7 @@ namespace JsonRpc.Commons
 
         private static JObject GetRequestContainer(string method, object id)
         {
-            JObject dto = new JObject();
+            var dto = new JObject();
             dto["jsonrpc"] = "2.0";
             dto["method"] = method;
             dto["id"] = id.ToString();

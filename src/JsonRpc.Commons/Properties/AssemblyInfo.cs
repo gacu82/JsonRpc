@@ -21,3 +21,5 @@ using System.Runtime.InteropServices;
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
 [assembly: Guid("2ec1a44d-4bf9-46af-8da8-339573e0eb1f")]
+[assembly: InternalsVisibleTo("JsonRpc.Host")]
+[assembly: InternalsVisibleTo("JsonRpc.Client")]

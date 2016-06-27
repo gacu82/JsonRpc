@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using JsonRpc.Host;
+using Microsoft.Extensions.Logging;
 
 namespace JsonRpc.Test.Server
 {
@@ -15,10 +16,14 @@ namespace JsonRpc.Test.Server
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app)
+        public void Configure(IApplicationBuilder app, ILoggerFactory loggerFactory)
         {
+            loggerFactory.AddConsole(LogLevel.Information);
             app.UseJsonRpc("/api");
-            JsonRpcProcessor.ScanAssemblies(() => new Assembly[] {typeof(Services).GetTypeInfo().Assembly});
+            JsonRpcProcessor.Instance.Configure(new JsonRpcHostOptions()
+            {
+               AssembliesToScan = new[] { typeof(Services).GetTypeInfo().Assembly }
+            });
         }
     }
 }

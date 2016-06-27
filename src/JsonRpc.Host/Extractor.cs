@@ -20,7 +20,7 @@ namespace JsonRpc.Host
             this.logger = logger;
         }
 
-        public List<RpcCallContext> ExtractAndMatch(string json, string service)
+        public List<RpcCallContext> ExtractAndMatchCalls(string json, string service)
         {
             var calls = new List<RpcCallContext>();
             var reqObj = this.ParseJsonOrThrow(json);
@@ -28,11 +28,12 @@ namespace JsonRpc.Host
 
             foreach (JToken req in reqArray)
             {
-                var call = new RpcCallContext(req);
+                var call = new RpcCallContext();
+                call.RawRequestJson = req;
                 calls.Add(call);
                 try
                 {
-                    this.ExtractAndMatchSingle(req, call, service);
+                    this.FillCallContext(req, call, service);
                 }
                 catch (JsonRpcInternalErrorException ex)
                 {
@@ -52,13 +53,13 @@ namespace JsonRpc.Host
             return calls;
         }
 
-        private RpcCallContext ExtractAndMatchSingle(JToken request, RpcCallContext call, string service)
+        private void FillCallContext(JToken request, RpcCallContext call, string service)
         {
             this.CheckIfValidJsonRpcOrThrow(request);
 
             call.MethodName = request["method"].ToString();
             call.Id = (JToken)request["id"];
-            call.CallType = call.Id == null ? RpcType.Notification : RpcType.Call;
+            call.CallType = call.Id == null ? RpcCallType.Notification : RpcCallType.Call;
 
             var methodEntry = this.register.GetMethodEntry(call.MethodName, service);
             if (methodEntry == null)
@@ -80,7 +81,6 @@ namespace JsonRpc.Host
                 parameters = this.ExtractParamsFromObjectOrThrow(paramsInfo, (JObject)requestParams);
             }
             call.Parameters = parameters;
-            return call;
         }
 
         private List<object> ExtractParamsFromArrayOrThrow(ParameterInfo[] paramsInfo, JArray requestParams)
@@ -111,7 +111,7 @@ namespace JsonRpc.Host
             // Check if there are any non-optional parameters unmatched
             var requestParamNames = requestParams.Properties().Select(x => x.Name);
             var notPresentRequiredParams = paramsInfo.Where(x => x.IsOptional == false && !requestParamNames.Contains(x.Name)).ToArray();
-            if (notPresentRequiredParams.Count() > 0)
+            if (notPresentRequiredParams.Any())
             {
                 throw new JsonRpcInvalidParamsException(paramsInfo, notPresentRequiredParams);
             }

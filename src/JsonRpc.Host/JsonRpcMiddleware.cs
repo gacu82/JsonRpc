@@ -1,36 +1,41 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using System.Text.RegularExpressions;
+using JsonRpc.Commons;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 
 namespace JsonRpc.Host
 {
-    public class JsonRpcMiddleware
+    internal class JsonRpcMiddleware
     {
         private static readonly Encoding utf8WithoutBom = new UTF8Encoding(false);
 
-        private static readonly Regex regExMethod =
-            new Regex(
-                @"""method""\s*:\s*""([^""]*)",
-                RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase | RegexOptions.Singleline);
-
         private readonly RequestDelegate next;
         private readonly ILogger logger;
-        private readonly ILoggerFactory loggerFactory;
+        private readonly ILogger loggerRequest;
+        private readonly ILogger loggerDiag;
+        private readonly JsonRpcProcessor processor;
 
-        public JsonRpcMiddleware(RequestDelegate next, ILoggerFactory loggerFactory)
+        public JsonRpcMiddleware(RequestDelegate next,
+            ILoggerFactory loggerFactory, 
+            IServiceProvider serviceProvider)
         {
             this.next = next;
-            this.loggerFactory = loggerFactory;
-            this.logger = loggerFactory.CreateLogger<JsonRpcMiddleware>();
+            this.logger = loggerFactory.CreateLogger("JsonRpc.Host");
+            this.loggerRequest = loggerFactory.CreateLogger("JsonRpc.Host.Requests");
+            this.loggerDiag = loggerFactory.CreateLogger("JsonRpc.Host.Diagnostics");
+            this.processor =  new JsonRpcProcessor(logger, loggerDiag, serviceProvider);
         }
 
         public async Task Invoke(HttpContext context)
         {
-            var diagnostics = new Diagnostics();
+            var requestStartDate = DateTime.Now;
+            var diagnostics = new Diagnostics() {StartDate = requestStartDate};
 
             var request = context.Request;
             var response = context.Response;
@@ -56,14 +61,10 @@ namespace JsonRpc.Host
                         requestString = await reader.ReadToEndAsync();
                     }
                 }
-
                 diagnostics.ReadingTime = watch.ElapsedMilliseconds;
-
-                var processor = new JsonRpcProcessor(this.loggerFactory, context.RequestServices);
                 var service = request.Path.ToString().Trim('/');
                 responseString = await processor.ProcessAsync(requestString, service);
                 diagnostics.ProcessingTime = watch.ElapsedMilliseconds - diagnostics.ReadingTime;
-
                 response.Headers.Add("Content-Type", "application/json");
                 response.Headers.Add("X-ProcessingTime", diagnostics.ProcessingTime.ToString());
                 response.ContentLength = utf8WithoutBom.GetByteCount(responseString);
@@ -81,25 +82,22 @@ namespace JsonRpc.Host
 
             try
             {
-                var methodName = this.ExtractMethodName(requestString);
-                this.logger.LogInformation($"{request.Method} {request.Path} JSONRPC: {methodName} {diagnostics.TotalTime}");
+                this.logger.LogInformation($"{request.Method} {request.Path} {diagnostics.TotalTime}");
+                this.loggerRequest.LogInformation(JsonConvert.SerializeObject(
+                    new
+                    {
+                        startDate = requestStartDate,
+                        request = requestString,
+                        response = responseString,
+                        processingTime = diagnostics.TotalTime,
+                        readingTime = diagnostics.ReadingTime,
+                        writingTime = diagnostics.WritingTime,
+                        totalTime = diagnostics.TotalTime
+                    }, RpcSerializer.SerializerSettings));
             }
             catch (Exception ex)
             {
                 this.logger.LogError("Error in JsonRpc middleware request logging.", ex);
-            }
-        }
-
-        private string ExtractMethodName(string request)
-        {
-            var methodMatch = regExMethod.Match(request);
-            if (methodMatch.Groups.Count >= 2)
-            {
-                return methodMatch.Groups[1].Value;
-            }
-            else
-            {
-                return null;
             }
         }
     }
