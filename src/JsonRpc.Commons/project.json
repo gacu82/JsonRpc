@@ -1,19 +1,18 @@
 {
-  "version": "1.0.0-*",
+  "version": "1.0.0-beta4",
   "description": "JsonRpc.Commons",
   "authors": [ "Krzysztof Szczuka" ],
   "frameworks": {
     "netcoreapp1.0": {
-      "imports": [ "netcore50" ],
-      "frameworkAssemblies": {
+      "Microsoft.NETCore.App": {
+        "type": "platform",
+        "version": "1.0.0-rc2-3002702"
       }
-    }
+    },
+    "netcore50": { },
+    "net451": { }
   },
   "dependencies": {
-    "Microsoft.NETCore.App": {
-      "type": "platform",
-      "version": "1.0.0-rc2-3002702"
-    },
     "Newtonsoft.Json": "9.0.1-beta1",
     "Microsoft.AspNetCore.Http.Abstractions": "1.0.0-rc2-final",
     "Microsoft.Extensions.Logging.Abstractions": "1.0.0-rc2-final"

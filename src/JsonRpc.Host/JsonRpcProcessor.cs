@@ -50,14 +50,9 @@ namespace JsonRpc.Host
             if(options.AssembliesToScan != null) this.register.ScanAssemblies(options.AssembliesToScan);
         }
 
-        public void ConfigureRequestId(string requestIdRegex)
+        public void RegisterException<T>(Func<T, ILogger, RpcError> handler) where T : Exception
         {
-            
-        }
-
-        public void RegisterException<T>(Func<T, RpcError> handler) where T : Exception
-        {
-            this.exceptionHandlers[typeof(T)] = e => handler.Invoke((T)e);
+            this.exceptionHandlers[typeof(T)] = e => handler.Invoke((T)e, this.logger);
         }
 
         public void UnregisterExcetpion<T>()

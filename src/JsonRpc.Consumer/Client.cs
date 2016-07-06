@@ -28,17 +28,12 @@ namespace JsonRpc.Client
             return await this.CallAsync(uri, new RpcCall(method, id, @params), service);
         }
 
-        public async Task<T> CallAsync<T>(Uri uri, RpcCall call, string service = null)
+        public async Task<RpcResponse<T>> CallAsync<T>(Uri uri, RpcCall call, string service = null)
         {
             var response = await this.CallAsync(uri, call, service);
-            if (response.Error != null)
-            {
-                throw new JsonRpcException(response.Error.Code, response.Error.Message, response.Error.Data);
-            }
-            else
-            {
-                return JToken.FromObject(response.Result).ToObject<T>(); // FIXME
-            }
+            T resultObject = default(T);
+            if(response.Result != null) resultObject = JToken.FromObject(response.Result).ToObject<T>(); // FIXME
+            return new RpcResponse<T>(resultObject, response.Id, response.Error);
         }
 
         public async Task<RpcResponse> CallAsync(Uri uri, RpcCall call, string service = null)

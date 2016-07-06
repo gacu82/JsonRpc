@@ -223,7 +223,7 @@ namespace JsonRpc.Host.Tests
         [Fact]
         public async Task TestCustomException()
         {
-            JsonRpcProcessor.Instance.RegisterException<CustomException>(e => new RpcError(555, "aaa"));
+            JsonRpcProcessor.Instance.RegisterException<CustomException>((e,l) => new RpcError(555, "aaa"));
             var request = @"{'jsonrpc': '2.0', 'method': 'customexceptiontest', 'id': 1}";
             var resp = await processor.ProcessAsync(request);
             var response = JObject.Parse(resp);

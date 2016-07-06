@@ -1,10 +1,8 @@
 ﻿using System;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
-using System.Text.RegularExpressions;
 using JsonRpc.Commons;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
