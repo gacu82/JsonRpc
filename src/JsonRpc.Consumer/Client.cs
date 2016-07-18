@@ -91,22 +91,4 @@ namespace JsonRpc.Client
                    (response["result"] != null || response["error"] != null);
         }
     }
-
-    public class JsonRpcCommunicationException : Exception
-    {
-        public JsonRpcCommunicationException(
-            string message,
-            string remoteServiceName = null,
-            string reqObjString = null,
-            Exception innerException = null
-        )
-            : base(message, innerException)
-        {
-            this.RemoteServiceName = remoteServiceName;
-            this.RequestObjString = reqObjString;
-        }
-
-        public string RemoteServiceName { get; }
-        public string RequestObjString { get; }
-    }
 }

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using JsonRpc.Commons;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace JsonRpc.Host
 {
@@ -21,13 +22,13 @@ namespace JsonRpc.Host
 
         public JsonRpcMiddleware(RequestDelegate next,
             ILoggerFactory loggerFactory, 
-            IServiceProvider serviceProvider)
+            IServiceScopeFactory serviceScopeFactory)
         {
             this.next = next;
             this.logger = loggerFactory.CreateLogger("JsonRpc.Host");
             this.loggerRequest = loggerFactory.CreateLogger("JsonRpc.Host.Requests");
             this.loggerDiag = loggerFactory.CreateLogger("JsonRpc.Host.Diagnostics");
-            this.processor =  new JsonRpcProcessor(logger, loggerDiag, serviceProvider);
+            this.processor =  new JsonRpcProcessor(logger, loggerDiag, serviceScopeFactory);
         }
 
         public async Task Invoke(HttpContext context)
@@ -59,39 +60,36 @@ namespace JsonRpc.Host
                         requestString = await reader.ReadToEndAsync();
                     }
                 }
-                diagnostics.ReadingTime = watch.ElapsedMilliseconds;
+                diagnostics.ReadTime = watch.ElapsedMilliseconds;
                 var service = request.Path.ToString().Trim('/');
                 responseString = await processor.ProcessAsync(requestString, service);
-                diagnostics.ProcessingTime = watch.ElapsedMilliseconds - diagnostics.ReadingTime;
+                diagnostics.ProcessTime = watch.ElapsedMilliseconds - diagnostics.ReadTime;
                 response.Headers.Add("Content-Type", "application/json");
-                response.Headers.Add("X-ProcessingTime", diagnostics.ProcessingTime.ToString());
+                response.Headers.Add("X-ProcessingTime", diagnostics.ProcessTime.ToString());
                 response.ContentLength = utf8WithoutBom.GetByteCount(responseString);
 
                 using (var writer = new StreamWriter(response.Body, utf8WithoutBom))
                 {
                     await writer.WriteAsync(responseString);
                 }
-                diagnostics.WritingTime = watch.ElapsedMilliseconds - diagnostics.ProcessingTime;
+                diagnostics.WriteTime = watch.ElapsedMilliseconds - diagnostics.ProcessTime;
             }
             catch (Exception ex)
             {
-                this.logger.LogError("Error in JsonRpc middleware", ex);
+                this.logger.LogError(0, ex, "Error in JsonRpc middleware");
             }
 
             try
             {
-                this.logger.LogInformation($"{request.Method} {request.Path} {diagnostics.TotalTime}");
-                this.loggerRequest.LogInformation(JsonConvert.SerializeObject(
-                    new
-                    {
-                        startDate = requestStartDate,
-                        request = requestString,
-                        response = responseString,
-                        processingTime = diagnostics.TotalTime,
-                        readingTime = diagnostics.ReadingTime,
-                        writingTime = diagnostics.WritingTime,
-                        totalTime = diagnostics.TotalTime
-                    }, RpcSerializer.SerializerSettings));
+                this.loggerRequest.LogInformation(
+                    "startDate: {startDate} request: {request} response: {response} processTime: {processTime} readTime: {readTime} writeTime: {writeTime} totalTime: {totalTime}",
+                        requestStartDate,
+                        requestString,
+                        responseString,
+                        diagnostics.ProcessTime,
+                        diagnostics.ReadTime,
+                        diagnostics.WriteTime,
+                        diagnostics.TotalTime);
             }
             catch (Exception ex)
             {

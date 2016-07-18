@@ -8,33 +8,34 @@ using System.Reflection;
 using System.Threading.Tasks;
 using JsonRpc.Commons;
 using JsonRpc.Commons.Exceptions;
+using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
 
 namespace JsonRpc.Host
 {
     public class JsonRpcProcessor
     {
-        private readonly Dictionary<Type, Func<Exception, RpcError>> exceptionHandlers
-           = new Dictionary<Type, Func<Exception, RpcError>>();
-        private readonly List<Type> requestHookServices = new List<Type>();
-        private readonly IServiceProvider serviceProvider;
-        private readonly ILogger logger;
-        private readonly ILogger loggerDiag;
-        private readonly RpcMethodRegister register;
-        private readonly Extractor parser;
-
 
         public JsonRpcProcessor(ILogger logger,
             ILogger loggerDiag,
-            IServiceProvider serviceProvider)
+            IServiceScopeFactory serviceScopeFactory)
         {
-            this.serviceProvider = serviceProvider;
+            this.serviceScopeFactory = serviceScopeFactory;
             this.logger = logger;
             this.loggerDiag = loggerDiag;
             this.register = new RpcMethodRegister(this.logger);
             this.parser = new Extractor(this.register, this.logger);
             JsonRpcProcessor.instance = this;
         }
+
+        private readonly Dictionary<Type, Func<Exception, RpcError>> exceptionHandlers
+           = new Dictionary<Type, Func<Exception, RpcError>>();
+        private readonly List<Type> requestHookServices = new List<Type>();
+        private readonly IServiceScopeFactory serviceScopeFactory;
+        private readonly ILogger logger;
+        private readonly ILogger loggerDiag;
+        private readonly RpcMethodRegister register;
+        private readonly Extractor parser;
 
         private static JsonRpcProcessor instance;
         public static JsonRpcProcessor Instance => instance;
@@ -46,8 +47,8 @@ namespace JsonRpc.Host
 
         public void Configure(JsonRpcHostOptions options)
         {
-            if(options.SerializerSettings != null) RpcSerializer.SerializerSettings = options.SerializerSettings;
-            if(options.AssembliesToScan != null) this.register.ScanAssemblies(options.AssembliesToScan);
+            if (options.SerializerSettings != null) RpcSerializer.SerializerSettings = options.SerializerSettings;
+            if (options.AssembliesToScan != null) this.register.ScanAssemblies(options.AssembliesToScan);
         }
 
         public void RegisterException<T>(Func<T, ILogger, RpcError> handler) where T : Exception
@@ -78,7 +79,6 @@ namespace JsonRpc.Host
             try
             {
                 var calls = this.parser.ExtractAndMatchCalls(json, service);
-                this.FireRequestHooks(calls.Select(x => x.RawRequestJson));
                 await this.CallAsync(calls.Where(x => x.Error == null).ToList());
                 var responses = this.PrepareResponses(calls);
                 if (responses == null) return null;
@@ -90,21 +90,18 @@ namespace JsonRpc.Host
             }
             catch (Exception ex)
             {
-                this.logger.LogError(ex.Message, ex);
+                this.logger.LogError(0, ex, ex.Message);
                 var err = new JsonRpcInternalErrorException(ex);
                 return RpcSerializer.ToJson(err);
             }
         }
 
-        private void FireRequestHooks(IEnumerable<JToken> requests)
+        private void FireRequestHook(IServiceProvider serviceProvider, JToken request)
         {
             foreach (var hookService in this.requestHookServices)
             {
-                IRequestHookService service = (IRequestHookService)this.CreateServiceInstance(hookService);
-                foreach (var request in requests)
-                {
-                    service.Process(request);
-                }
+                IRequestHookService service = (IRequestHookService)this.CreateServiceInstance(serviceProvider, hookService);
+                service.Process(request);
             }
         }
 
@@ -131,12 +128,12 @@ namespace JsonRpc.Host
             return responses;
         }
 
-        private object CreateServiceInstance(Type type)
+        private object CreateServiceInstance(IServiceProvider serviceProvider, Type type)
         {
             object obj = null;
-            if (this.serviceProvider != null)
+            if (serviceProvider != null)
             {
-                obj = this.serviceProvider.GetService(type);
+                obj = serviceProvider.GetService(type);
                 if (obj == null)
                 {
                     throw new Exception($"Unable to create instance of {type.Name}. Check IoC container registration.");
@@ -153,16 +150,18 @@ namespace JsonRpc.Host
         {
             var awaitableCalls = new List<RpcCallContext>();
             var watch = new Stopwatch();
-            var dateStart = DateTime.Now;
+            var startDate = DateTime.Now;
             foreach (var call in rpcCalls)
             {
-                dateStart = DateTime.Now;
+                var scope = this.serviceScopeFactory?.CreateScope();
+                this.FireRequestHook(scope?.ServiceProvider, call.RawRequestJson);
+                startDate = DateTime.Now;
                 watch.Start();
                 try
                 {
                     if (call.Error != null) return;
                     var entry = call.RegistryEntry;
-                    var service = this.CreateServiceInstance(entry.ClassType);
+                    var service = this.CreateServiceInstance(scope?.ServiceProvider, entry.ClassType);
                     if (entry.IsAsync)
                     {
                         var task = (Task)entry.MethodInfo.Invoke(service, call.Parameters.ToArray());
@@ -185,12 +184,12 @@ namespace JsonRpc.Host
                 {
                     this.HandleExeption(ex, call);
                 }
-                this.loggerDiag.LogInformation(JsonConvert.SerializeObject(new
-                {
-                    dateStart = dateStart,
-                    methodName = call.MethodName,
-                    processingTime = watch.ElapsedMilliseconds
-                }, RpcSerializer.SerializerSettings));
+                this.loggerDiag.LogInformation("dateStart: {startDate} method: {method} processTime: {processTime}",
+                    startDate,
+                    call.MethodName,
+                    watch.ElapsedMilliseconds);
+
+                scope?.Dispose();
             }
         }
 
@@ -209,7 +208,7 @@ namespace JsonRpc.Host
                 }
                 else
                 {
-                    this.logger.LogError(ex.Message, ex);
+                    this.logger.LogError(0, ex, ex.Message);
                     call.Error = RpcError.FromException(new JsonRpcInternalErrorException(ex));
                 }
             }

@@ -276,7 +276,7 @@ namespace JsonRpc.Host.Tests
         {
             GlobalFlags.HookHit = false;
             JsonRpcProcessor.Instance.RegisterRequestHookService<RequestHookService>();
-            var request = @"{'jsonrpc': '2.0', 'method': 'someMethod', 'id': 1, params: { 'a': 1, 'b': 'c'}}";
+            var request = @"{'jsonrpc': '2.0', 'method': 'add', 'id': 1, params: { 'a': 1, 'b': 3}}";
             var resp = await processor.ProcessAsync(request);
             var response = JObject.Parse(resp);
             Assert.True(GlobalFlags.HookHit);
@@ -316,10 +316,10 @@ namespace JsonRpc.Host.Tests
     {
         public void Process(JToken req)
         {
-            Assert.Equal(req["method"].Value<string>(), "someMethod");
+            Assert.Equal(req["method"].Value<string>(), "add");
             Assert.Equal(req["id"].Value<int>(), 1);
             Assert.Equal(req["params"]["a"].Value<int>(), 1);
-            Assert.Equal(req["params"]["b"].Value<string>(), "c");
+            Assert.Equal(req["params"]["b"].Value<int>(), 3);
             GlobalFlags.HookHit = true;
         }
     }

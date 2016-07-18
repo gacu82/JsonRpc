@@ -9,9 +9,9 @@ namespace JsonRpc.Host
     {
         public string RequestId { get; set; }
         public DateTime StartDate { get; set; }
-        public long ReadingTime { get; set; }
-        public long ProcessingTime { get; set; }
-        public long WritingTime { get; set; }
-        public long TotalTime => this.ReadingTime + this.ProcessingTime + this.WritingTime;
+        public long ReadTime { get; set; }
+        public long ProcessTime { get; set; }
+        public long WriteTime { get; set; }
+        public long TotalTime => this.ReadTime + this.ProcessTime + this.WriteTime;
     }
 }
