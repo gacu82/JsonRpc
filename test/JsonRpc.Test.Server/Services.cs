@@ -1,4 +1,6 @@
 ﻿using JsonRpc.Host;
+using System;
+using System.Threading;
 
 namespace JsonRpc.Test.Server
 {
@@ -7,6 +9,7 @@ namespace JsonRpc.Test.Server
         [JsonRpcMethod]
         public int Add(int a, int b)
         {
+            Thread.Sleep(50 + new Random().Next(0, 200));
             return a + b;
         }
     }

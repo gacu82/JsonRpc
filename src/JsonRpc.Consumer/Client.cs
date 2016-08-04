@@ -3,85 +3,86 @@ using JsonRpc.Commons.Exceptions;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using System;
+using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace JsonRpc.Client
 {
-    public class JsonRpcClient
+    public class RpcClient : IRpcClient
     {
-        private readonly ILogger logger;
+        private readonly ILogger loggerRequests;
+        private readonly ILogger loggerDiagnostics;
         private readonly Encoding utf8EncodingWithoutBom = new UTF8Encoding(false);
-        private readonly TimeSpan timeout;
         private readonly IRequestFactory requestFactory;
 
-        public JsonRpcClient(IRequestFactory requestFactory, TimeSpan timeout, ILogger<JsonRpcClient> logger)
+        public static TimeSpan DefaultTimeout => TimeSpan.FromSeconds(60);
+
+        public RpcClient(ILoggerFactory loggerFactory, IRequestFactory requestFactory=null, TimeSpan? timeout=null)
         {
-            this.requestFactory = requestFactory;
-            this.timeout = timeout;
-            this.logger = logger;
+            this.requestFactory = requestFactory ?? new DefaultRequestFactory();
+            this.requestFactory.Timeout = timeout ?? DefaultTimeout;
+            this.loggerRequests = loggerFactory.CreateLogger("JsonRpc.Client.Requests");
+            this.loggerDiagnostics = loggerFactory.CreateLogger("JsonRpc.Client.Diagnostics");
         }
 
-        public async Task<RpcResponse> CallAsync(Uri uri, object id, string method, object @params, string service = null)
+        public async Task<RpcResponse> CallAsync(Uri uri, string method, object id, object @params, string service = null)
         {
-            return await this.CallAsync(uri, new RpcCall(method, id, @params), service);
+            return await this.CallAsyncInner(uri, new RpcCall(method, id, @params), service);
         }
 
         public async Task<RpcResponse<T>> CallAsync<T>(Uri uri, RpcCall call, string service = null)
         {
-            var response = await this.CallAsync(uri, call, service);
+            var response = await this.CallAsyncInner(uri, call, service);
             T resultObject = default(T);
             if(response.Result != null) resultObject = JToken.FromObject(response.Result).ToObject<T>(); // FIXME
             return new RpcResponse<T>(resultObject, response.Id, response.Error);
         }
 
-        public async Task<RpcResponse> CallAsync(Uri uri, RpcCall call, string service = null)
+        private async Task<RpcResponse> CallAsyncInner(Uri uri,
+            RpcCall call,
+            string service = null)
         {
-            return await CallAsyncInner(uri, call, service).TimeoutAfter(this.timeout);
-        }
-
-        private async Task<RpcResponse> CallAsyncInner(Uri uri, RpcCall call, string service = null)
-        {
+            var watch = Stopwatch.StartNew();
             if (!string.IsNullOrWhiteSpace(service))
             {
                 uri = new Uri(uri, service);
             }
             var requestString = RpcSerializer.ToJson(call);
-            logger.LogTrace($"Request {uri} {requestString}");
+            string responseString = null;
+            DateTime startDate = DateTime.Now;
             try
             {
-                var request = this.requestFactory.CreateHttp(uri);
-                request.ContentType = "application/json";
-                request.Headers["Accept-Charset"] = "utf-8";
-                request.Method = "POST";
-                using (var requestStream = await request.GetRequestStreamAsync())
+                var content = new StringContent(requestString, Encoding.UTF8);
+                content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/json; charser=utf-8");
+                var response = await this.requestFactory.PostAsync(uri, content);//, cancellationTokenSource.Token);
+                response.EnsureSuccessStatusCode();
+                responseString = await response.Content.ReadAsStringAsync();
+                var jToken = JToken.Parse(responseString);
+                if (!this.IsValidJsonRpcResponse(jToken))
                 {
-                    var requestBytes = utf8EncodingWithoutBom.GetBytes(requestString);
-                    await requestStream.WriteAsync(requestBytes, 0, requestBytes.Length);
+                    throw new JsonRpcCommunicationException(
+                        "Invalid JSONRPC in response", uri.ToString(), responseString);
                 }
-                var response = await request.GetResponseAsync();
-                using (var responseStream = response.GetResponseStream())
-                {
-                    using (TextReader reader = new StreamReader(responseStream, utf8EncodingWithoutBom))
-                    {
-                        var responseString = await reader.ReadToEndAsync();
-                        logger.LogTrace($"Response {uri} {responseString}");
-                        var jToken = JToken.Parse(responseString);
-                        if (!this.IsValidJsonRpcResponse(jToken))
-                        {
-                            throw new JsonRpcCommunicationException(
-                                "Invalid JSONRPC in response", uri.ToString(), responseString);
-                        }
-                        return jToken.ToObject<RpcResponse>();
-                    }
-                }
+                return jToken.ToObject<RpcResponse>();
             }
             catch (Exception ex)
             {
                 throw new JsonRpcCommunicationException(
                     "Request error. Check inner exception for details",
                     uri.ToString(), requestString, ex);
+            }
+            finally
+            {
+                var processTime = watch.ElapsedMilliseconds;
+                this.loggerRequests.LogInformation("startDate: {startDate} request: {request} response: {response} processTime: {processTime}",
+                    startDate, requestString, responseString, processTime);
+                this.loggerDiagnostics.LogInformation("startDate {startDate} method: {method} processTime: {processTime}",
+                    startDate, call.Method, processTime);
             }
         }
 
