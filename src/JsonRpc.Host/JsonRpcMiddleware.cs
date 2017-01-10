@@ -3,9 +3,7 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
-using JsonRpc.Commons;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace JsonRpc.Host
@@ -29,6 +27,26 @@ namespace JsonRpc.Host
             this.loggerRequest = loggerFactory.CreateLogger("JsonRpc.Host.Requests");
             this.loggerDiag = loggerFactory.CreateLogger("JsonRpc.Host.Diagnostics");
             this.processor =  new JsonRpcProcessor(logger, loggerDiag, serviceScopeFactory);
+        }
+
+        public void LogRequest(DateTime requestDate, string requestBody, string responseBody, Diagnostics diagnostics)
+        {
+            this.loggerRequest.LogInformation(
+                "startDate: {startDate} request: {request} response: {response} " +
+                "processTime: {processTime} readTime: {readTime} writeTime: {writeTime} totalTime: {totalTime}",
+                requestDate,
+                requestBody,
+                responseBody,
+                diagnostics.ProcessTime,
+                diagnostics.ReadTime,
+                diagnostics.WriteTime,
+                diagnostics.TotalTime
+            );
+        }
+
+        public void LogError(string msg, params object[] args)
+        {
+             this.logger.LogError(msg, args);
         }
 
         public async Task Invoke(HttpContext context)
@@ -65,7 +83,6 @@ namespace JsonRpc.Host
                 responseString = await processor.ProcessAsync(requestString, service);
                 diagnostics.ProcessTime = watch.ElapsedMilliseconds - diagnostics.ReadTime;
                 response.Headers.Add("Content-Type", "application/json");
-                response.Headers.Add("X-ProcessingTime", diagnostics.ProcessTime.ToString());
                 response.ContentLength = utf8WithoutBom.GetByteCount(responseString);
 
                 using (var writer = new StreamWriter(response.Body, utf8WithoutBom))
@@ -76,24 +93,16 @@ namespace JsonRpc.Host
             }
             catch (Exception ex)
             {
-                this.logger.LogError(0, ex, "Error in JsonRpc middleware");
+                this.LogError("Error in JsonRpc middleware: {Exception}", ex);
             }
 
             try
             {
-                this.loggerRequest.LogInformation(
-                    "startDate: {startDate} request: {request} response: {response} processTime: {processTime} readTime: {readTime} writeTime: {writeTime} totalTime: {totalTime}",
-                        requestStartDate,
-                        requestString,
-                        responseString,
-                        diagnostics.ProcessTime,
-                        diagnostics.ReadTime,
-                        diagnostics.WriteTime,
-                        diagnostics.TotalTime);
+                this.LogRequest(requestStartDate, requestString, responseString, diagnostics);
             }
             catch (Exception ex)
             {
-                this.logger.LogError("Error in JsonRpc middleware request logging.", ex);
+                this.LogError("Error in JsonRpc middleware request logging: {Exception}", ex);
             }
         }
     }
