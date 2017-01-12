@@ -14,39 +14,20 @@ namespace JsonRpc.Host
 
         private readonly RequestDelegate next;
         private readonly ILogger logger;
-        private readonly ILogger loggerRequest;
         private readonly ILogger loggerDiag;
         private readonly JsonRpcProcessor processor;
+        private readonly IJsonRpcRequestLogger requestLogger;
 
         public JsonRpcMiddleware(RequestDelegate next,
             ILoggerFactory loggerFactory, 
-            IServiceScopeFactory serviceScopeFactory)
+            IServiceScopeFactory serviceScopeFactory,
+            IJsonRpcRequestLogger requestLogger)
         {
             this.next = next;
             this.logger = loggerFactory.CreateLogger("JsonRpc.Host");
-            this.loggerRequest = loggerFactory.CreateLogger("JsonRpc.Host.Requests");
             this.loggerDiag = loggerFactory.CreateLogger("JsonRpc.Host.Diagnostics");
             this.processor =  new JsonRpcProcessor(logger, loggerDiag, serviceScopeFactory);
-        }
-
-        public void LogRequest(DateTime requestDate, string requestBody, string responseBody, Diagnostics diagnostics)
-        {
-            this.loggerRequest.LogInformation(
-                "startDate: {startDate} request: {request} response: {response} " +
-                "processTime: {processTime} readTime: {readTime} writeTime: {writeTime} totalTime: {totalTime}",
-                requestDate,
-                requestBody,
-                responseBody,
-                diagnostics.ProcessTime,
-                diagnostics.ReadTime,
-                diagnostics.WriteTime,
-                diagnostics.TotalTime
-            );
-        }
-
-        public void LogError(string msg, params object[] args)
-        {
-             this.logger.LogError(msg, args);
+            this.requestLogger = requestLogger;
         }
 
         public async Task Invoke(HttpContext context)
@@ -93,16 +74,16 @@ namespace JsonRpc.Host
             }
             catch (Exception ex)
             {
-                this.LogError("Error in JsonRpc middleware: {Exception}", ex);
+                this.logger.LogError("Error in JsonRpc middleware: {Exception}", ex);
             }
 
             try
             {
-                this.LogRequest(requestStartDate, requestString, responseString, diagnostics);
+                this.requestLogger.Log(requestStartDate, requestString, responseString, diagnostics);
             }
             catch (Exception ex)
             {
-                this.LogError("Error in JsonRpc middleware request logging: {Exception}", ex);
+                this.logger.LogError("Error in JsonRpc middleware request logging: {Exception}", ex);
             }
         }
     }
