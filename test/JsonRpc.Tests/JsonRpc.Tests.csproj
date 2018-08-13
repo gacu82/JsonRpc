@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>JsonRpc.Tests</Description>
+    <TargetFramework>netcoreapp2.0</TargetFramework>
+    <AssemblyName>JsonRpc.Tests</AssemblyName>
+    <OutputType>Library</OutputType>
+    <PackageId>JsonRpc.Tests</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\JsonRpc.Commons\JsonRpc.Commons.csproj" />
+    <ProjectReference Include="..\..\src\JsonRpc.Host\JsonRpc.Host.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.8.0" />
+    <PackageReference Include="Moq" Version="4.9.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.4.0" />
+    <PackageReference Include="FluentAssertions" Version="5.4.1" />
+    <PackageReference Include="JsonRpc.Client" Version="1.0.0-*" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="2.1.1" />
+    <PackageReference Include="Microsoft.NETCore.Platforms" Version="2.1.0" />
+    <PackageReference Include="xunit" Version="2.4.0" />
+  </ItemGroup>
+
+</Project>

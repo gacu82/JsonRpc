@@ -7,7 +7,7 @@ using System.Collections.Generic;
 
 namespace JsonRpc.Commons
 {
-    internal static class RpcSerializer
+    public static class RpcSerializer
     {
         public static JsonSerializerSettings SerializerSettings { get; set; }
 
